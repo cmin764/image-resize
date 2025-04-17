@@ -91,15 +91,14 @@ func (s *service) getImageHandler() http.HandlerFunc {
 			case <-time.After(s.timeout):
 				w.WriteHeader(http.StatusProcessing) // 102 Processing
 				w.Header().Add("content-type", "application/json")
+				// Do not mind if the response below isn't flushed/displayed.
 				resp := map[string]string{
 					"status":  "processing",
 					"message": "Image is still being processed, please try again later",
 				}
-				w.Write([]byte("")) // Flush headers before writing response
 				if err := json.NewEncoder(w).Encode(resp); err != nil {
 					log.Printf("Failed to encode response: %v", err)
 				}
-				w.(http.Flusher).Flush() // Force flush the response
 				return
 			}
 		}

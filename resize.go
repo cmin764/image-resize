@@ -12,6 +12,8 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -111,14 +113,29 @@ func fetchAndResize(url string, width uint, height uint) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	time.Sleep(3 * time.Second) // Simulate processing delay
+	// Optionally, simulate processing delay.
+	timeout, err := strconv.Atoi(os.Getenv("IMAGE_PROCESSING_DURATION"))
+	if err != nil {
+		timeout = 0 // no extra time if the env var is absent
+	}
+	time.Sleep(time.Duration(timeout) * time.Second)
 
 	return resize(data, width, height)
 }
 
 func fetch(url string) ([]byte, error) {
 	log.Print("fetching ", url)
-	r, err := http.Get(url)
+
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
+
+	// Add a common Chrome User-Agent
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36")
+
+	r, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetch failed: %v", err)
 	}
