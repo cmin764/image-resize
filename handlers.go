@@ -37,7 +37,20 @@ func (s *service) resizeHandler() http.HandlerFunc {
 			return
 		}
 
-		w.WriteHeader(http.StatusCreated)
+		// Check if all results are cached
+		allCached := true
+		for _, result := range results {
+			if !result.Cached {
+				allCached = false
+				break
+			}
+		}
+
+		if allCached {
+			w.WriteHeader(http.StatusOK)
+		} else {
+			w.WriteHeader(http.StatusCreated)
+		}
 		w.Header().Add("content-type", "application/json")
 		w.Write(data)
 	})
