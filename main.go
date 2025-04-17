@@ -3,12 +3,14 @@ package main
 import (
 	"log"
 	"net/http"
+	"sync"
 
 	lru "github.com/hashicorp/golang-lru"
 )
 
 type service struct {
-	cache *lru.Cache
+	cache      *lru.Cache
+	inProgress sync.Map // stores the set of IDs being processed
 }
 
 type resizeRequest struct {
@@ -24,10 +26,11 @@ type resizeResult struct {
 }
 
 const (
-	proto    = "http://"
-	hostport = "localhost:8080"
-	success  = "success"
-	failure  = "failure"
+	proto      = "http://"
+	hostport   = "localhost:8080"
+	success    = "success"
+	failure    = "failure"
+	processing = "processing"
 )
 
 func main() {

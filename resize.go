@@ -24,6 +24,7 @@ func (s *service) processResizes(request resizeRequest) ([]resizeResult, error) 
 		key := "/v1/image/" + id + ".jpeg"
 		newURL := proto + hostport + key
 
+		// Check first if the image is already cached.
 		if s.cache.Contains(key) {
 			result.URL = newURL
 			result.Result = success
@@ -32,16 +33,29 @@ func (s *service) processResizes(request resizeRequest) ([]resizeResult, error) 
 			continue
 		}
 
+		// Otherwise, check if the image is already being processed.
+		if _, progress := s.inProgress.Load(id); progress {
+			result.URL = newURL
+			result.Result = processing
+			results = append(results, result)
+			continue
+		}
+
+		// If none, we should process it and mark the status accordingly.
+		s.inProgress.Store(id, struct{}{})
+
 		data, err := fetchAndResize(url, request.Width, request.Height)
 		if err != nil {
 			log.Printf("failed to resize %s: %v", url, err)
+			s.inProgress.Delete(id)
 			result.Result = failure
 			results = append(results, result)
 			continue
 		}
 
-		log.Print("caching ", key)
+		log.Print("Adding image to cache ", key)
 		s.cache.Add(key, data)
+		s.inProgress.Delete(id) // image processing is done
 
 		result.URL = newURL
 		result.Result = success
