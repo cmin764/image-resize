@@ -13,6 +13,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	jpgresize "github.com/nfnt/resize"
 )
@@ -55,7 +56,7 @@ func (s *service) processResizes(request resizeRequest, async bool) ([]resizeRes
 		go func(url string) {
 			defer wg.Done()
 
-			resizeCh := make(chan struct{})
+			resizeCh := make(chan struct{}, 1) // to let the goroutine finish
 			result.Result = processing
 			go func() {
 				s.inProgress.Store(id, struct{}{})
@@ -71,6 +72,11 @@ func (s *service) processResizes(request resizeRequest, async bool) ([]resizeRes
 					result.Result = success
 					result.Cached = false
 					log.Print("adding image to cache ", id)
+					/*
+					 * No worries on cache thread-safety, because we're already
+					 * protected by the `s.inProgress` map and we aren't processing the
+					 * same image concurrently.
+					 */
 					s.cache.Add(id, data)
 				}
 				resizeCh <- struct{}{}
@@ -95,6 +101,7 @@ func (s *service) processResizes(request resizeRequest, async bool) ([]resizeRes
 	for result := range resultChan {
 		results = append(results, result)
 	}
+	log.Println("All images completed!")
 
 	return results, nil
 }
@@ -104,6 +111,7 @@ func fetchAndResize(url string, width uint, height uint) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	time.Sleep(3 * time.Second) // Simulate processing delay
 
 	return resize(data, width, height)
 }

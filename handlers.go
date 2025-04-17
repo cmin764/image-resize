@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 )
 
 func (s *service) resizeHandler() http.HandlerFunc {
@@ -68,6 +69,42 @@ func (s *service) getImageHandler() http.HandlerFunc {
 		parts := strings.Split(path, "/")
 		filename := parts[len(parts)-1]
 		id := strings.Split(filename, ".")[0]
+
+		// Check if image is being processed
+		if _, processing := s.inProgress.Load(id); processing {
+			// Wait until processing is complete or timeout occurs
+			done := make(chan struct{})
+			go func() {
+				for {
+					if _, stillProcessing := s.inProgress.Load(id); !stillProcessing {
+						close(done)
+						return
+					}
+					time.Sleep(100 * time.Millisecond)
+				}
+			}()
+
+			// Wait with timeout
+			select {
+			case <-done:
+				// Processing finished, continue to check cache
+			case <-time.After(s.timeout):
+				w.WriteHeader(http.StatusProcessing) // 102 Processing
+				w.Header().Add("content-type", "application/json")
+				resp := map[string]string{
+					"status":  "processing",
+					"message": "Image is still being processed, please try again later",
+				}
+				w.Write([]byte("")) // Flush headers before writing response
+				if err := json.NewEncoder(w).Encode(resp); err != nil {
+					log.Printf("Failed to encode response: %v", err)
+				}
+				w.(http.Flusher).Flush() // Force flush the response
+				return
+			}
+		}
+
+		// Check cache after processing is complete
 		data, ok := s.cache.Get(id)
 		if !ok {
 			w.WriteHeader(http.StatusNotFound)
