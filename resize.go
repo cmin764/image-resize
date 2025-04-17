@@ -12,21 +12,31 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"sync"
 
 	jpgresize "github.com/nfnt/resize"
 )
 
-func (s *service) processResizes(request resizeRequest) ([]resizeResult, error) {
+func (s *service) processResizes(request resizeRequest, async bool) ([]resizeResult, error) {
+	mode := "sync"
+	if async {
+		mode = "async"
+	}
+	log.Printf("Processing %d images in %s mode\n", len(request.URLs), mode)
+
 	results := make([]resizeResult, 0, len(request.URLs))
+	resultChan := make(chan resizeResult, len(request.URLs))
+	var wg sync.WaitGroup
+
 	for _, url := range request.URLs {
 		result := resizeResult{}
 		id := genID(url)
-		key := "/v1/image/" + id + ".jpeg"
-		newURL := proto + hostport + key
+		result.OldURL = url
+		result.Cached = false
+		result.URL = proto + hostport + "/v1/image/" + id + ".jpeg"
 
 		// Check first if the image is already cached.
-		if s.cache.Contains(key) {
-			result.URL = newURL
+		if s.cache.Contains(id) {
 			result.Result = success
 			result.Cached = true
 			results = append(results, result)
@@ -35,31 +45,54 @@ func (s *service) processResizes(request resizeRequest) ([]resizeResult, error) 
 
 		// Otherwise, check if the image is already being processed.
 		if _, progress := s.inProgress.Load(id); progress {
-			result.URL = newURL
 			result.Result = processing
 			results = append(results, result)
 			continue
 		}
 
 		// If none, we should process it and mark the status accordingly.
-		s.inProgress.Store(id, struct{}{})
+		wg.Add(1)
+		go func(url string) {
+			defer wg.Done()
 
-		data, err := fetchAndResize(url, request.Width, request.Height)
-		if err != nil {
-			log.Printf("failed to resize %s: %v", url, err)
-			s.inProgress.Delete(id)
-			result.Result = failure
-			results = append(results, result)
-			continue
-		}
+			resizeCh := make(chan struct{})
+			result.Result = processing
+			go func() {
+				s.inProgress.Store(id, struct{}{})
+				defer s.inProgress.Delete(id) // image processing would be done by the end
 
-		log.Print("Adding image to cache ", key)
-		s.cache.Add(key, data)
-		s.inProgress.Delete(id) // image processing is done
+				data, err := fetchAndResize(url, request.Width, request.Height)
+				if err != nil {
+					log.Printf("failed to resize %s: %v", url, err)
+					result.Result = failure
+					result.URL = ""
+				} else {
+					log.Printf("succeeded to resize %s", url)
+					result.Result = success
+					result.Cached = false
+					log.Print("adding image to cache ", id)
+					s.cache.Add(id, data)
+				}
+				resizeCh <- struct{}{}
+			}()
+			if !async {
+				<-resizeCh
+			}
 
-		result.URL = newURL
-		result.Result = success
-		result.Cached = false
+			// log.Println("Adding result to channel", result)
+			resultChan <- result
+			// log.Println("Added result to channel", result)
+		}(url)
+	}
+
+	// Close channel when all goroutines are done
+	go func() {
+		wg.Wait()
+		close(resultChan)
+	}()
+
+	log.Println("Waiting for all the images to complete...")
+	for result := range resultChan {
 		results = append(results, result)
 	}
 

@@ -22,6 +22,7 @@ type resizeRequest struct {
 type resizeResult struct {
 	Result string `json:"result"`
 	URL    string `json:"url,omitempty"`
+	OldURL string `json:"original_url"`
 	Cached bool   `json:"cached"`
 }
 

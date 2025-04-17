@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 )
 
 func (s *service) resizeHandler() http.HandlerFunc {
@@ -23,7 +24,8 @@ func (s *service) resizeHandler() http.HandlerFunc {
 			return
 		}
 
-		results, err := s.processResizes(request)
+		async := strings.ToLower(r.URL.Query().Get("async")) == "true"
+		results, err := s.processResizes(request, async)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Failed to process request"))
@@ -37,7 +39,7 @@ func (s *service) resizeHandler() http.HandlerFunc {
 			return
 		}
 
-		// Check if all results are cached
+		// When all the requested images are cached, we're not creating any new resources.
 		allCached := true
 		for _, result := range results {
 			if !result.Cached {
@@ -46,7 +48,9 @@ func (s *service) resizeHandler() http.HandlerFunc {
 			}
 		}
 
-		if allCached {
+		if async {
+			w.WriteHeader(http.StatusAccepted) // for later on processing
+		} else if allCached {
 			w.WriteHeader(http.StatusOK)
 		} else {
 			w.WriteHeader(http.StatusCreated)
@@ -59,7 +63,12 @@ func (s *service) resizeHandler() http.HandlerFunc {
 func (s *service) getImageHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Print("fetching ", r.URL.String())
-		data, ok := s.cache.Get(r.URL.String())
+		// Extract ID by splitting path and removing extension
+		path := strings.TrimRight(r.URL.Path, "/")
+		parts := strings.Split(path, "/")
+		filename := parts[len(parts)-1]
+		id := strings.Split(filename, ".")[0]
+		data, ok := s.cache.Get(id)
 		if !ok {
 			w.WriteHeader(http.StatusNotFound)
 			return
