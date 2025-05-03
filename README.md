@@ -144,11 +144,11 @@ http POST ":8080/v1/resize?async=true" @data/req.json
 http http://localhost:8080/v1/image/AQPdOTElKSNH_piyJSCR4p1yMMRC1omE-mClICKUoks=.jpeg
 ```
 
-1. If status is `102`, wait and retry until you get `200` (or a `404` if the process failed in the meantime)
+> If status is `102`, wait and retry until you get `200` (or a `404` if the process failed in the meantime)
 
 ## Improvements
 
-See [docs/improvements.md](docs/improvements.md) for a list of potential improvements, including:
+See [improvements](docs/improvements.md) for a list of potential fixes, including:
 
 - Adding comprehensive test coverage
 - Performance optimizations
