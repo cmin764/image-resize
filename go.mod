@@ -1,4 +1,4 @@
-module github.com/cmin764/interview-fm-backend
+module github.com/cmin764/image-resize
 
 go 1.15
 

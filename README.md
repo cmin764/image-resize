@@ -19,25 +19,29 @@ A Go-based service that resizes images from provided URLs and serves them throug
 ## Installation
 
 1. Clone the repository:
-```bash
-git clone https://github.com/cmin764/interview-fm-backend.git
-cd interview-fm-backend
+
+```console
+git clone https://github.com/cmin764/image-resize.git
+cd image-resize
 ```
 
 2. Install Air for development:
-```bash
-go install github.com/cosmtrek/air@latest
+
+```console
+go install github.com/air-verse/air@latest
 ```
 
 3. Install project dependencies:
-```bash
+  
+```console
 go mod download
 ```
 
 ## Configuration
 
 Create a `.env` file in the project root by copying the template:
-```bash
+
+```console
 cp .env.template .env
 ```
 
@@ -54,7 +58,8 @@ IMAGE_PROCESSING_DURATION=3
 ## Running the Server
 
 ### Development Mode (with hot reload)
-```bash
+
+```console
 # Try this first
 air
 
@@ -63,7 +68,8 @@ air
 ```
 
 ### Production Mode
-```bash
+
+```console
 go run .
 ```
 
@@ -75,15 +81,16 @@ The server will start on `http://localhost:8080`
 
 Send a POST request to `/v1/resize` with a JSON body containing the image URLs and desired dimensions:
 
-```bash
+```console
 # Synchronous mode (default)
-http POST ":8080/v1/resize" @req.json
+http POST ":8080/v1/resize" @data/req.json
 
 # Asynchronous mode
-http POST ":8080/v1/resize?async=true" @req.json
+http POST ":8080/v1/resize?async=true" @data/req.json
 ```
 
-Example request body (`req.json`):
+Example request [body](./data/req.json):
+
 ```json
 {
   "urls": [
@@ -98,41 +105,51 @@ Example request body (`req.json`):
 ### Access Resized Images
 
 After processing, access the resized images at:
-```
+
+```console
 http://localhost:8080/v1/image/{image-id}.jpeg
 ```
 
 ## Response Handling
 
 ### Synchronous Mode
-- Returns 201 Created when new images are processed
-- Returns 200 OK when all images are served from cache
-- Returns 202 Accepted in async mode
+
+- Returns:
+  - `200 OK` when all images are served straight from the cache
+  - `201 Created` when new images are processed and saved to cache
 
 ### Asynchronous Mode
-- Returns 202 Accepted immediately
-- Check individual image URLs for status:
-  - 102 Processing: Image is still being processed
-  - 200 OK: Image is ready
-  - 404 Not Found: Image processing failed
+
+- Returns `202 Accepted` immediately (later processing)
+
+### Resized image retrieval
+
+Check individual image URLs for status.
+
+- `102 Processing`: Image is still being processed
+- `200 OK`: Image is ready and retrieved
+- `404 Not Found`: Image processing failed and not found in the cache
 
 ## Example Workflow
 
 1. Send resize request:
-```bash
-http POST ":8080/v1/resize?async=true" @req.json
+
+```console
+http POST ":8080/v1/resize?async=true" @data/req.json
 ```
 
 2. Check image status:
-```bash
-http http://localhost:8080/v1/image/{image-id}.jpeg
+
+```console
+http http://localhost:8080/v1/image/AQPdOTElKSNH_piyJSCR4p1yMMRC1omE-mClICKUoks=.jpeg
 ```
 
-3. If status is 102, wait and retry until you get 200 OK
+1. If status is `102`, wait and retry until you get `200` (or a `404` if the process failed in the meantime)
 
-## ToDo and Improvements
+## Improvements
 
 See [docs/improvements.md](docs/improvements.md) for a list of potential improvements, including:
+
 - Adding comprehensive test coverage
 - Performance optimizations
 - Security enhancements
